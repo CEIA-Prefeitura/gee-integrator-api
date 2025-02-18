@@ -2,6 +2,8 @@
 
 A GEEIntegratorAPI é uma API REST desenvolvida em FastAPI que simplifica a integração com o Google Earth Engine (GEE), permitindo acesso e manipulação eficientes de dados geoespaciais. Ideal para desenvolvedores e cientistas de dados, esta API facilita a visualização e análise de imagens de satélite, como Sentinel-2 e Landsat, com suporte a filtros temporais e parâmetros de visualização personalizados.
 
+![openapi.png](data/openapi.png)
+
 ## Principais Características
 
 * Integração com Google Earth Engine (GEE)
