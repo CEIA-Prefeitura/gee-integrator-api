@@ -1,0 +1,3 @@
+[default]
+GEE_SERVICE_ACCOUNT_FILE='/app/.service-accounts/gee.json'
+LIFESPAN_URL =  1

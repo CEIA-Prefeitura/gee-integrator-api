@@ -1,0 +1,36 @@
+version: '3.8'
+
+name: gee-integrator-api
+
+services:
+  gee-integrator-api-local:
+    image: ceia-prefeitura/gee-integrator-api:prod-latest
+    hostname: gee-integrator-api-local
+    container_name: gee-integrator-api-local
+    privileged: true
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 500M
+    
+    restart: always
+    stdin_open: true
+    tty: true
+    volumes:
+      - '/etc/localtime:/etc/localtime'
+      - './.service-accounts/gee.json:/app/.service-accounts/gee.json'
+  
+  valkey:
+    image: 'valkey/valkey:7.2.5'
+    hostname: valkey
+    container_name: valkey
+    ports:
+      - '6379:6379'
+    volumes:
+      - 'valkey-data:/data'
+    restart: always
+
+volumes:
+  valkey-data:
