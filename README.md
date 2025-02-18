@@ -37,13 +37,13 @@ A GEE-Integrator-API é uma API REST desenvolvida em FastAPI que simplifica a in
 -   **Visualização de Imagens Sentinel-2:**
 
     ```bash
-    GET /api/s2_harmonized/{x}/{y}/{z}?period=WET&year=2023&visparam=tvi-red
+    GET /api/s2_harmonized/{x}/{y}/{z}?period=WET&year=2023&visparam=s2-red
     ```
 
 -   **Visualização de Imagens Landsat:**
 
     ```bash
-    GET /api/landsat/{x}/{y}/{z}?period=MONTH&year=2022&visparam=landsat-tvi-false&month=6
+    GET /api/landsat/{x}/{y}/{z}?period=MONTH&year=2022&visparam=landsat-false&month=6
     ```
 
 ## Benefícios
