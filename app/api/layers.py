@@ -1,23 +1,22 @@
+import calendar
 import io
 import json
-import calendar
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 
-from app.utils.capabilities import CAPABILITIES
-from app.utils.cache import getCacheUrl
-import ee
 import aiohttp
-from fastapi import APIRouter, HTTPException, Request, Query
+import ee
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
 
-
 from app.config import logger, settings
+from app.errors import generate_error_image
 from app.tile import tile2goehashBBOX
+from app.utils.cache import getCacheUrl
+from app.utils.capabilities import CAPABILITIES
 from app.visParam import VISPARAMS
 from app.visParam import get_landsat_vis_params
-from app.errors import generate_error_image
+
 router = APIRouter()
 
 
@@ -35,7 +34,12 @@ async def fetch_image_from_api(image_url: str):
                 raise HTTPException(status_code=response.status, detail="Imagem não encontrada na API externa")
             return await response.read()
 
-@router.get("/s2_harmonized/{x}/{y}/{z}")
+@router.get("/capabilities", tags=["Layers"])
+def get_capabilities():
+    return CAPABILITIES
+
+
+@router.get("/s2_harmonized/{x}/{y}/{z}", tags=["Layers"])
 async def get_s2_harmonized(
     request: Request,
     x: int,
@@ -140,7 +144,7 @@ async def get_s2_harmonized(
     logger.info(f"Success not cached {file_cache}")
     return StreamingResponse(io.BytesIO(binary_data), media_type="image/png")
 
-@router.get("/landsat/{x}/{y}/{z}")
+@router.get("/landsat/{x}/{y}/{z}", tags=["Layers"])
 async def get_landsat(
         request: Request,
         x: int,

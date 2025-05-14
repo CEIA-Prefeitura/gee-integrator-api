@@ -1,43 +1,37 @@
 import typing
+from contextlib import asynccontextmanager
 
-from app.utils.capabilities import CAPABILITIES
 import ee
 import orjson
+import valkey
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from google.oauth2 import service_account
-import valkey
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings, logger, start_logger
+from google.oauth2 import service_account
+
+from app.config import settings, logger, start_logger, env
 from app.database import Base, engine
 from app.router import created_routes
 from app.utils.cors import origin_regex, allow_origins
+from app.middleware.sso_keycloack import KeycloakAuthMiddleware
+from app.middleware.exception_handler import register_exception_handlers
+from app.auth.open_api_auth import add_global_bearer_auth
 
-Base.metadata.create_all(bind=engine)
+async def init_models() -> None:
+    async with engine.begin() as conn:
+        # Executa DDLs de forma síncrona no mesmo connection pool
+        await conn.run_sync(Base.metadata.create_all)
+
 
 class ORJSONResponse(JSONResponse):
     media_type = "application/json"
-
     def render(self, content: typing.Any) -> bytes:
         return orjson.dumps(content)
 
-app = FastAPI(default_response_class=ORJSONResponse)
-
-# Configurações CORS com expressões regulares para subdomínios dinâmicos
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,  # Lista de origens estáticas (deixe vazio se estiver usando regex)
-    allow_methods=["*"],  # Métodos permitidos
-    allow_headers=["*"],  # Cabeçalhos permitidos
-    allow_credentials=True,  # Permite o envio de cookies/credenciais
-    allow_origin_regex=origin_regex,
-    expose_headers=["X-Response-Time"],  # Cabeçalhos expostos
-    max_age=3600,  # Tempo máximo para cache da resposta preflight
-)
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     start_logger()
+    await init_models()
     try:
         service_account_file = settings.GEE_SERVICE_ACCOUNT_FILE
         logger.debug(f"Initializing service account {service_account_file}")
@@ -46,24 +40,38 @@ async def startup_event():
             scopes=["https://www.googleapis.com/auth/earthengine.readonly"],
         )
         ee.Initialize(credentials)
-
         print("GEE Initialized successfully.")
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to initialize GEE")
-    
-    app.state.valkey = valkey.Valkey(host='valkey', port=6379)
-    
-@app.on_event("shutdown")
-async def shutdown_event():
+
+    app.state.valkey = valkey.Valkey(host=env.get("VALKEY_HOST", 'valkey'), port=env.get("VALKEY_PORT", 6379))
+    yield
     app.state.valkey.close()
 
-@app.get("/")
+app = FastAPI(default_response_class=ORJSONResponse, lifespan=lifespan)
+add_global_bearer_auth(app)
+
+# Configurações CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+    allow_origin_regex=origin_regex,
+    expose_headers=["X-Response-Time"],
+    max_age=3600,
+)
+
+app.add_middleware(KeycloakAuthMiddleware)
+register_exception_handlers(app)
+
+@app.get("/", tags=["Root"])
 def read_root():
     return {"message": "Bem-vindo ao GEE-Integrator-API"}
 
-@app.get('/api/capabilities')
-def get_capabilities():
-    return CAPABILITIES
-
+@app.get("/healthz", tags=["Infra"])
+def health_check():
+    return {"status": "ok"}
 
 app = created_routes(app)
