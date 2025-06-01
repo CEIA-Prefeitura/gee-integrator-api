@@ -1,6 +1,4 @@
 from datetime import datetime
-from app.config import logger
-
 
 def getCacheUrl(cache):
     if cache is None:

@@ -26,6 +26,9 @@ A GEEIntegratorAPI é uma API REST desenvolvida em FastAPI que simplifica a inte
     * Logs detalhados para monitoramento e depuração.
     * Respostas de erro personalizadas (imagens em branco, mensagens de erro).
 
+
+![flow.svg](data/flow.svg)
+
 ## Tecnologias Utilizadas
 
 -   **FastAPI:** Criação da API com alta performance e suporte a operações assíncronas.

@@ -160,7 +160,7 @@ async def get_open_buildings_png(
             )
 
             if collection.size().getInfo() == 0:
-                logger.debug("Sem dados do Open Buildings para %s", year)
+                logger.debug("Sem dados do Open Buildings para %s", year)
                 return FileResponse("data/notfound.png", media_type="image/png")
 
             image = collection.mosaic().select(*BAND_VISPARAMS[band]["bands"])
