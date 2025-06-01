@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import ee
 import orjson
 import valkey
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from google.oauth2 import service_account
@@ -15,6 +15,7 @@ from app.utils.cors import origin_regex, allow_origins
 from app.middleware.sso_keycloack import KeycloakAuthMiddleware
 from app.middleware.exception_handler import register_exception_handlers
 from app.auth.open_api_auth import add_global_bearer_auth
+from app.api.health_check import check_gee, check_valkey, check_planet
 
 
 
@@ -60,7 +61,7 @@ app.add_middleware(
 app.add_middleware(KeycloakAuthMiddleware)
 register_exception_handlers(app)
 
-@app.get("/", tags=["Root"])
+@app.get("/", tags=["Root"],  include_in_schema=False)
 def read_root():
     return {"message": "Bem-vindo ao GEE-Integrator-API"}
 
@@ -68,8 +69,23 @@ def read_root():
 def favicon():
     return FileResponse("static/favicon.ico")
 
-@app.get("/healthz", tags=["Infra"])
-def health_check():
-    return {"status": "ok"}
+@app.get("/healthz", tags=["Infra"],  include_in_schema=False)
+async def health_check():
+    results = {
+        "status": "ok",
+        "gee": "unknown",
+        "redis": "unknown",
+        "planet": "unknown"
+    }
+
+    results["gee"] = await check_gee()
+    results["redis"] = check_valkey(app.state.valkey)
+    results["planet"] = await check_planet()
+
+    if any(status != "connected" for status in results.values() if status != "ok"):
+        results["status"] = "error"
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=results)
+
+    return results
 
 app = created_routes(app)

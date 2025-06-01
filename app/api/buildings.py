@@ -22,14 +22,20 @@ for necessário.
 from __future__ import annotations
 
 import io
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from enum import Enum
 from typing import Final
 
 import aiohttp
 import ee
-from fastapi import APIRouter, HTTPException, Request
+import numpy as np
+import pandas as pd
+from fastapi import APIRouter, HTTPException, Query
+from fastapi import Request
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse
+from scipy.signal import savgol_filter
 
 from app.auth.role_route import RoleAPIRouter
 from app.config import logger, settings
@@ -108,7 +114,7 @@ def _ano_valido(year: int) -> bool:
 # ----------------------------------------------------------------------------
 # Endpoint
 # ----------------------------------------------------------------------------
-@router.get("/{x}/{y}/{z}", name="Open Buildings PNG")
+@router.get("/{x}/{y}/{z}", name="Open Buildings PNG Tile Service (XYZ)")
 async def get_open_buildings_png(
     request: Request,
     x: int,
@@ -190,3 +196,78 @@ async def get_open_buildings_png(
 
     logger.info("Tile gerado %s", file_cache)
     return StreamingResponse(io.BytesIO(png), media_type="image/png")
+
+
+@router.get("/{lat}/{lon}", name="Open Buildings Timeseries")
+def timeseries_open_buildings(
+    lat: float,
+    lon: float,
+    band: str = Query("height", enum=["presence", "height"]),
+    start_date: str = Query("2015-07-01"),
+    end_date: str = Query(datetime.now().strftime('%Y-%m-%d'))
+
+):
+    try:
+        point = ee.Geometry.Point([lon, lat])
+        collection = ee.ImageCollection("GOOGLE/Research/open-buildings-temporal/v1") \
+            .filterDate(start_date, end_date) \
+            .filterBounds(point)
+
+        banda_gee = {
+            "presence": "building_presence",
+            "height": "building_height"
+        }[band]
+
+        def extract_band_timeseries(image):
+            date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd')
+            value = image.select(banda_gee).reduceRegion(
+                reducer=ee.Reducer.mean(),
+                geometry=point,
+                scale=10
+            ).get(banda_gee)
+            return ee.Feature(None, {"date": date, band: value})
+
+        series = collection.map(extract_band_timeseries).filter(
+            ee.Filter.notNull([band])
+        )
+
+        data = series.reduceColumns(
+            ee.Reducer.toList(2), ['date', band]
+        ).get('list').getInfo()
+
+        if not data:
+            return JSONResponse(content=[], status_code=204)
+
+        dates, values = zip(*data)
+        df = pd.DataFrame({'date': dates, band: values})
+        df = df.groupby('date').mean().reset_index()
+
+        def smooth(values, window_size=5, poly_order=2):
+            if len(values) >= window_size:
+                return savgol_filter(values, window_size, poly_order).tolist()
+            return values
+
+        values_raw = df[band].tolist()
+        values_smoothed = smooth(np.array(values_raw))
+
+        return JSONResponse(content=[
+            {
+                "x": df['date'].tolist(),
+                "y": values_raw,
+                "type": "scatter",
+                "mode": "markers",
+                "name": f"{band} (Original)"
+            },
+            {
+                "x": df['date'].tolist(),
+                "y": values_smoothed,
+                "type": "scatter",
+                "mode": "lines",
+                "name": f"{band} (Smoothed)"
+            }
+        ])
+
+    except ee.EEException as e:
+        raise HTTPException(status_code=500, detail=f"Earth Engine error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
