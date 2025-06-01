@@ -15,7 +15,7 @@ AUDIENCE = env.get("SSO_CLIENT_ID")
 JWKS_URL = f"{ISSUER}/protocol/openid-connect/certs"
 CACHE_TTL = 60 * 10
 WHITELIST_PATHS = [
-    "/"
+    "/",
     "/docs",
     "/openapi.json",
     "/redoc",

@@ -30,8 +30,10 @@ async def jwt_exception_handler(request: Request, exc: JWTError):
 
 
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"[{type(exc).__name__}] {repr(exc)}")
-    return _error_response(exc.status_code, str(exc.detail))
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+
+    return _error_response(500, "Erro interno inesperado")
 
 
 def register_exception_handlers(app: FastAPI):

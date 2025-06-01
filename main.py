@@ -5,22 +5,17 @@ import ee
 import orjson
 import valkey
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from google.oauth2 import service_account
 
 from app.config import settings, logger, start_logger, env
-from app.database import Base, engine
 from app.router import created_routes
 from app.utils.cors import origin_regex, allow_origins
 from app.middleware.sso_keycloack import KeycloakAuthMiddleware
 from app.middleware.exception_handler import register_exception_handlers
 from app.auth.open_api_auth import add_global_bearer_auth
 
-async def init_models() -> None:
-    async with engine.begin() as conn:
-        # Executa DDLs de forma síncrona no mesmo connection pool
-        await conn.run_sync(Base.metadata.create_all)
 
 
 class ORJSONResponse(JSONResponse):
@@ -31,7 +26,6 @@ class ORJSONResponse(JSONResponse):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_logger()
-    await init_models()
     try:
         service_account_file = settings.GEE_SERVICE_ACCOUNT_FILE
         logger.debug(f"Initializing service account {service_account_file}")
@@ -69,6 +63,10 @@ register_exception_handlers(app)
 @app.get("/", tags=["Root"])
 def read_root():
     return {"message": "Bem-vindo ao GEE-Integrator-API"}
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse("static/favicon.ico")
 
 @app.get("/healthz", tags=["Infra"])
 def health_check():

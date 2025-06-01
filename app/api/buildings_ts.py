@@ -4,7 +4,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from scipy.signal import savgol_filter
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.auth.role_route import RoleAPIRouter
 
 router: APIRouter = RoleAPIRouter()
