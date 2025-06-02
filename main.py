@@ -1,5 +1,6 @@
 import typing
 from contextlib import asynccontextmanager
+import json
 
 import ee
 import orjson
@@ -28,19 +29,25 @@ class ORJSONResponse(JSONResponse):
 async def lifespan(app: FastAPI):
     start_logger()
     try:
-        service_account_file = settings.GEE_SERVICE_ACCOUNT_FILE
-        logger.debug(f"Initializing service account {service_account_file}")
-        credentials = service_account.Credentials.from_service_account_file(
-            service_account_file,
+        service_account_info = json.loads(env.GEE_SERVICE_ACCOUNT)
+        logger.debug("Initializing service account from environment variable")
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
             scopes=["https://www.googleapis.com/auth/earthengine.readonly"],
         )
         ee.Initialize(credentials)
         print("GEE Initialized successfully.")
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to initialize GEE")
         raise HTTPException(status_code=500, detail="Failed to initialize GEE")
 
-    app.state.valkey = valkey.Valkey(host=env.get("VALKEY_HOST", 'valkey'), port=env.get("VALKEY_PORT", 6379))
+    app.state.valkey = valkey.Valkey(
+        host=env.get("VALKEY_HOST", 'valkey'),
+        port=int(env.get("VALKEY_PORT", 6379))
+    )
+
     yield
+
     app.state.valkey.close()
 
 app = FastAPI(default_response_class=ORJSONResponse, lifespan=lifespan)
