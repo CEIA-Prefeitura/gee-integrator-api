@@ -67,7 +67,7 @@ BAND_VISPARAMS: Final[dict[Band, dict[str, int | list[str]]]] = {
     Band.height: {
         "bands": ["building_height"],
         "min": 0,
-        "max": 30,
+        "max": 100,
         "palette": [
             "002873",  # azul escuro
             "1e6caf",  # azul médio
