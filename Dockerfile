@@ -20,10 +20,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 📂 Copia código e requisitos
+COPY requirements.txt .
 COPY . /app
-COPY requirements.txt ./
 
-# 📦 Instala dependências com uv
+# 📦 Instala dependências com uv (modo system para copiar depois)
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # ===========================
@@ -31,7 +31,9 @@ RUN uv pip install --system --no-cache-dir -r requirements.txt
 # ===========================
 FROM python:3.12-slim-bookworm
 
-# 🔧 Copia binário e dependências da imagem builder
+# 🔧 Corrige PATH e copia dependências da builder
+ENV PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/home/tilesuser/.local/bin:$PATH"
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
