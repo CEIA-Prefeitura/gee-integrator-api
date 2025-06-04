@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 📂 Copia código e requisitos
-COPY ./tiles ./tiles
+COPY . /app
 COPY requirements.txt ./
 
 # 📦 Instala dependências com uv
@@ -38,7 +38,7 @@ COPY --from=builder /app /app
 
 ARG TILES_ENV=production
 ENV TILES_ENV=${TILES_ENV}
-WORKDIR /app/tiles
+WORKDIR /app
 
 # 👤 Usuário não-root
 RUN addgroup --system tilesgroup && adduser --system --ingroup tilesgroup tilesuser && \
