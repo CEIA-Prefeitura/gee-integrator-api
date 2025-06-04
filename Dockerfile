@@ -3,6 +3,8 @@
 # ===========================
 FROM python:3.12-slim-bookworm AS builder
 
+LABEL maintainer="Renato Gomes Silverio <renatogomessilverio@gmail.com>"
+
 # 🔧 Copia o binário do 'uv'
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -30,6 +32,8 @@ RUN uv pip install --system --no-cache-dir -r requirements.txt
 # 🚀 Etapa 2: Imagem Final
 # ===========================
 FROM python:3.12-slim-bookworm
+
+LABEL maintainer="Renato Gomes Silverio <renatogomessilverio@gmail.com>"
 
 # 🔧 Corrige PATH e copia dependências da builder
 ENV PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/home/tilesuser/.local/bin:$PATH"
