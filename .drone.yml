@@ -1,6 +1,6 @@
 kind: pipeline
 type: kubernetes
-name: gee-integrator-api
+name: scanurb-gyn-api
 
 trigger:
   branch:
@@ -14,21 +14,16 @@ steps:
     image: plugins/kaniko
     settings:
       registry: harbor.sefaz.ceia.inf.ufg.br
-      repo: harbor.sefaz.ceia.inf.ufg.br/sefinceia/gee-integrator-api
+      repo: harbor.sefaz.ceia.inf.ufg.br/sefinceia/scanurb-gyn-api
       tags:
         - latest
         - ${DRONE_COMMIT_SHA:0:7}
-      build_args:
-        - TILES_ENV=${TILES_ENV}
       username:
         from_secret: HARBOR_USERNAME
       password:
         from_secret: HARBOR_PASSWORD
       skip_tls_verify: false
       verbose: true
-    environment:
-      TILES_ENV:
-        from_secret: TILES_ENV
 
   - name: update-gitops-manifest
     image: alpine/git
@@ -39,7 +34,7 @@ steps:
       - git config --global user.name "ceiaprefeituradevops"
       - git config --global user.email "ceiaprefeitura@gmail.com"
       - git clone https://$GITHUB_TOKEN@github.com/CEIA-Prefeitura/gitops-ceia-manifests.git
-      - cd gitops-ceia-manifests/gee-integrator-api/helm
+      - cd gitops-ceia-manifests/scanurb-gyn-api/helm
       - sed -i "s|\(tag:\).*|\1 \"${DRONE_COMMIT_SHA:0:7}\"|" values.yaml
       - git add values.yaml
       - git commit -m "Update image tag to ${DRONE_COMMIT_SHA:0:7} [CI/CD]"
