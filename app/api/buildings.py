@@ -67,15 +67,17 @@ BAND_VISPARAMS: Final[dict[Band, dict[str, int | list[str]]]] = {
     Band.height: {
         "bands": ["building_height"],
         "min": 0,
-        "max": 100,
+        "max": 80,
         "palette": [
-            "002873",  # azul escuro
-            "1e6caf",  # azul médio
-            "39a7b4",  # turquesa
-            "7ecf4c",  # verde
-            "ffe971",  # amarelo
-            "ff7c39",  # laranja
-            "ff0000",  # vermelho
+            "002873",
+            "1e6caf",
+            "39a7b4",
+            "7ecf4c",
+            "b4d96f",
+            "ffe971",
+            "ffb347",
+            "ff7c39",
+            "ff0000",
         ],
     },
     Band.presence: {
@@ -111,9 +113,6 @@ def _ano_valido(year: int) -> bool:
     meta = next((c for c in CAPABILITIES["collections"] if c["name"] == "open_buildings"), None)
     return not meta or year in meta.get("year", [])
 
-# ----------------------------------------------------------------------------
-# Endpoint
-# ----------------------------------------------------------------------------
 @router.get("/{x}/{y}/{z}", name="Open Buildings PNG Tile Service (XYZ)")
 async def get_open_buildings_png(
     request: Request,
@@ -186,7 +185,6 @@ async def get_open_buildings_png(
     else:
         tile_url = url_info["url"]
 
-    # ---------- Download do PNG e grava no cache ---------------------------
     try:
         png = await _fetch_png(tile_url.format(x=x, y=y, z=z))
         request.app.state.valkey.set(file_cache, png)
