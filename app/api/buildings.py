@@ -44,6 +44,14 @@ from app.tile import tile2goehashBBOX
 from app.utils.cache import getCacheUrl
 from app.utils.capabilities import CAPABILITIES
 
+from app.utils.scalebar import (
+    ScaleBarGenerator,
+    ScaleBarConfig,
+    Orientation,
+    create_height_scalebar,
+    create_presence_scalebar
+)
+
 # ----------------------------------------------------------------------------
 # Configurações gerais
 # ----------------------------------------------------------------------------
@@ -113,7 +121,166 @@ def _ano_valido(year: int) -> bool:
     meta = next((c for c in CAPABILITIES["collections"] if c["name"] == "open_buildings"), None)
     return not meta or year in meta.get("year", [])
 
-@router.get("/{x}/{y}/{z}", name="Open Buildings PNG Tile Service (XYZ)")
+@router.get("/legend/{band}", name="Open Buildings Legend/Scale Bar", roles=["gee-integrator-api.user_access"])
+async def get_legend_scalebar(
+        band: Band,
+        width: int = Query(300, description="Largura da barra de legenda"),
+        height: int = Query(50, description="Altura da barra de legenda"),
+        orientation: str = Query("horizontal", enum=["horizontal", "vertical"]),
+        show_labels: bool = Query(True, description="Mostrar labels com valores"),
+        font_size: int = Query(12, description="Tamanho da fonte dos labels"),
+        continuous: bool = Query(True, description="Gradiente contínuo ou cores discretas"),
+):
+    """
+    Gera uma scale bar (barra de legenda) para a banda especificada e retorna como base64.
+
+    Utiliza a classe ScaleBarGenerator para criar legendas profissionais.
+    """
+    try:
+        # Configurar gerador
+        config = ScaleBarConfig(
+            width=width,
+            height=height,
+            orientation=Orientation(orientation),
+            show_labels=show_labels,
+            font_size=font_size,
+            continuous=continuous if band == Band.height else False
+        )
+
+        generator = ScaleBarGenerator(config)
+
+        # Obter parâmetros da banda
+        vis_params = BAND_VISPARAMS[band]
+
+        if band == Band.height:
+            # Scale bar para altura
+            img = generator.create_scale_bar(
+                colors=vis_params["palette"],
+                min_value=vis_params["min"],
+                max_value=vis_params["max"],
+                unit="m",
+                title="Altura (metros)",
+                intermediate_values=[20, 40, 60]
+            )
+        else:
+            # Scale bar para presença
+            img = generator.create_scale_bar(
+                colors=vis_params["palette"],
+                min_value=vis_params["min"],
+                max_value=vis_params["max"],
+                unit="",
+                title="Presença de Edificação",
+                custom_labels={0: "Ausente", 1: "Presente"}
+            )
+
+        # Converter para base64
+        img_base64 = generator.to_base64(img)
+
+        return JSONResponse(content={
+            "band": band.value,
+            "image_base64": img_base64,
+            "width": img.width,
+            "height": img.height,
+            "min_value": vis_params["min"],
+            "max_value": vis_params["max"],
+            "unit": "meters" if band == Band.height else "binary",
+            "palette": vis_params["palette"]
+        })
+
+    except Exception as e:
+        logger.exception("Erro ao gerar scale bar: %s", e)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar scale bar: {str(e)}")
+
+
+@router.get("/legend/{band}/png", name="Open Buildings Legend PNG Direct")
+async def get_legend_png(
+        band: Band,
+        width: int = Query(300),
+        height: int = Query(50),
+        orientation: str = Query("horizontal", enum=["horizontal", "vertical"]),
+        show_labels: bool = Query(True),
+        font_size: int = Query(12),
+):
+    """Retorna a scale bar diretamente como arquivo PNG."""
+
+    try:
+        # Usar funções auxiliares para simplicidade
+        if band == Band.height:
+            img, _ = create_height_scalebar(width, height, orientation, show_labels)
+        else:
+            img, _ = create_presence_scalebar(width, height, orientation, show_labels)
+
+        # Converter para bytes
+        config = ScaleBarConfig()
+        generator = ScaleBarGenerator(config)
+        img_bytes = generator.to_bytes(img)
+
+        return StreamingResponse(
+            io.BytesIO(img_bytes),
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=86400",  # Cache por 24h
+                "Content-Disposition": f"inline; filename=legend_{band.value}.png"
+            }
+        )
+
+    except Exception as e:
+        logger.exception("Erro ao gerar PNG: %s", e)
+        # Retornar imagem de erro
+        return StreamingResponse(
+            generate_error_image(f"Erro: {str(e)}"),
+            media_type="image/png"
+        )
+
+
+@router.get("/legend/categorical", name="Categorical Legend Generator", roles=["gee-integrator-api.user_access"])
+async def get_categorical_legend(
+        categories: str = Query(..., description="JSON com categorias {label: color}"),
+        title: str = Query("", description="Título da legenda"),
+        box_size: int = Query(20, description="Tamanho das caixas de cor"),
+        columns: int = Query(1, description="Número de colunas"),
+        format: str = Query("json", enum=["json", "png"]),
+):
+    """
+    Gera uma legenda categórica customizada.
+
+    Exemplo de categories:
+    {"Floresta": "#228B22", "Água": "#0000FF", "Urbano": "#808080"}
+    """
+    try:
+        import json
+        categories_dict = json.loads(categories)
+
+        config = ScaleBarConfig()
+        generator = ScaleBarGenerator(config)
+
+        img = generator.create_categorical_legend(
+            categories=categories_dict,
+            title=title,
+            box_size=box_size,
+            columns=columns
+        )
+
+        if format == "png":
+            img_bytes = generator.to_bytes(img)
+            return StreamingResponse(io.BytesIO(img_bytes), media_type="image/png")
+        else:
+            img_base64 = generator.to_base64(img)
+            return JSONResponse(content={
+                "image_base64": img_base64,
+                "width": img.width,
+                "height": img.height,
+                "categories": categories_dict
+            })
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Formato JSON inválido para categories")
+    except Exception as e:
+        logger.exception("Erro ao gerar legenda categórica: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{x}/{y}/{z}", name="Open Buildings PNG Tile Service (XYZ)", roles=["gee-integrator-api.user_access"])
 async def get_open_buildings_png(
     request: Request,
     x: int,
@@ -196,7 +363,7 @@ async def get_open_buildings_png(
     return StreamingResponse(io.BytesIO(png), media_type="image/png")
 
 
-@router.get("/{lat}/{lon}", name="Open Buildings Timeseries")
+@router.get("/{lat}/{lon}", name="Open Buildings Timeseries", roles=["gee-integrator-api.user_access"])
 def timeseries_open_buildings(
     lat: float,
     lon: float,
