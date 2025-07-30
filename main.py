@@ -16,7 +16,7 @@ from app.utils.cors import origin_regex, allow_origins
 from app.middleware.sso_keycloack import KeycloakAuthMiddleware
 from app.middleware.exception_handler import register_exception_handlers
 from app.auth.open_api_auth import add_global_bearer_auth
-from app.api.health_check import check_gee, check_valkey, check_planet
+from app.api.health_check import check_gee, check_valkey
 
 
 
@@ -81,15 +81,15 @@ async def health_check():
     results = {
         "status": "ok",
         "gee": "unknown",
-        "redis": "unknown",
-        "planet": "unknown"
+        "redis": "unknown"
     }
 
     results["gee"] = await check_gee()
     results["redis"] = check_valkey(app.state.valkey)
-    results["planet"] = await check_planet()
 
-    if any(status != "connected" for status in results.values() if status != "ok"):
+    # Verifica apenas gee e redis, ignorando planet
+    checks_to_verify = ["gee", "redis"]
+    if any(results.get(check) != "connected" for check in checks_to_verify):
         results["status"] = "error"
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=results)
 
