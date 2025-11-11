@@ -18,17 +18,12 @@ steps:
       tags:
         - dev-latest
         - dev-${DRONE_COMMIT_SHA:0:7}
-      build_args:
-        - TILES_ENV=${TILES_ENV}
       username:
         from_secret: HARBOR_USERNAME
       password:
         from_secret: HARBOR_PASSWORD
       skip_tls_verify: false
       verbose: true
-    environment:
-      TILES_ENV:
-        from_secret: TILES_ENV
 
   - name: update-gitops-manifest
     image: alpine/git
