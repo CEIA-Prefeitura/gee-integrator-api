@@ -60,6 +60,6 @@ A GEEIntegratorAPI é uma API REST desenvolvida em FastAPI que simplifica a inte
 
 ## Licença
 
-Este projeto é licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+Este projeto é licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes..
 
 
