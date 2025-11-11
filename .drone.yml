@@ -4,7 +4,7 @@ name: gee-integrator-api
 
 trigger:
   branch:
-    - main
+    - develop
   event:
     exclude:
       - pull_request
@@ -16,8 +16,8 @@ steps:
       registry: harbor.sefaz.ceia.inf.ufg.br
       repo: harbor.sefaz.ceia.inf.ufg.br/sefinceia/gee-integrator-api
       tags:
-        - latest
-        - ${DRONE_COMMIT_SHA:0:7}
+        - dev-latest
+        - dev-${DRONE_COMMIT_SHA:0:7}
       build_args:
         - TILES_ENV=${TILES_ENV}
       username:
@@ -36,14 +36,18 @@ steps:
       GITHUB_TOKEN:
         from_secret: GITHUB_ACESS_TOKEN
     commands:
+      - echo "Updating GitOps manifest for DEV..."
       - git config --global user.name "ceiaprefeituradevops"
       - git config --global user.email "ceiaprefeitura@gmail.com"
       - git clone https://$GITHUB_TOKEN@github.com/CEIA-Prefeitura/gitops-ceia-manifests.git
-      - cd gitops-ceia-manifests/gee-integrator-api/helm
-      - sed -i "s|\(tag:\).*|\1 \"${DRONE_COMMIT_SHA:0:7}\"|" values.yaml
+      - cd gitops-ceia-manifests/gee-integrator-api-dev/helm
+      - sed -i "s|\(tag:\).*|\1 \"dev-${DRONE_COMMIT_SHA:0:7}\"|" values.yaml
+      - echo "Changes:"
+      - git diff values.yaml
       - git add values.yaml
-      - git commit -m "Update image tag to ${DRONE_COMMIT_SHA:0:7} [CI/CD]"
+      - git commit -m "Update gee-integrator-api-dev image tag to dev-${DRONE_COMMIT_SHA:0:7} [CI/CD]"
       - git push origin main
+      - echo "GitOps manifest updated for DEV!"
     depends_on:
       - build-and-push
 
