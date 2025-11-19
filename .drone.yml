@@ -1,6 +1,7 @@
+---
 kind: pipeline
 type: kubernetes
-name: gee-integrator-api
+name: gee-integrator-api-production
 
 trigger:
   branch:
@@ -36,14 +37,111 @@ steps:
       GITHUB_TOKEN:
         from_secret: GITHUB_ACESS_TOKEN
     commands:
+      - echo "Updating GitOps manifest for PRODUCTION..."
       - git config --global user.name "ceiaprefeituradevops"
       - git config --global user.email "ceiaprefeitura@gmail.com"
       - git clone https://$GITHUB_TOKEN@github.com/CEIA-Prefeitura/gitops-ceia-manifests.git
       - cd gitops-ceia-manifests/gee-integrator-api/helm
       - sed -i "s|\(tag:\).*|\1 \"${DRONE_COMMIT_SHA:0:7}\"|" values.yaml
+      - echo "Changes:"
+      - git diff values.yaml
       - git add values.yaml
-      - git commit -m "Update image tag to ${DRONE_COMMIT_SHA:0:7} [CI/CD]"
+      - git commit -m "Update gee-integrator-api image tag to ${DRONE_COMMIT_SHA:0:7} [CI/CD]"
       - git push origin main
+      - echo "GitOps manifest updated for PRODUCTION!"
+    depends_on:
+      - build-and-push
+
+  - name: notify-discord-success
+    image: python:3.11-slim
+    environment:
+      DISCORD_WEBHOOK:
+        from_secret: DISCORD_WEBHOOK
+      STATUS: success
+      DOCKER_REPO: harbor.sefaz.ceia.inf.ufg.br/sefinceia/${DRONE_REPO_NAME}
+      DRONE_COMMIT_AUTHOR: ${DRONE_COMMIT_AUTHOR}
+      DRONE_BRANCH: ${DRONE_BRANCH}
+      DRONE_COMMIT_SHA: ${DRONE_COMMIT_SHA}
+      DRONE_REPO_OWNER: ${DRONE_REPO_OWNER}
+      DRONE_REPO_NAME: ${DRONE_REPO_NAME}
+      DRONE_BUILD_LINK: ${DRONE_BUILD_LINK}
+    commands:
+      - apt-get update && apt-get install -y curl
+      - pip install requests pytz python-dateutil
+      - python3 gitops-ceia-manifests/scripts/notify_discord.py
+    when:
+      status:
+        - success
+    depends_on:
+      - update-gitops-manifest
+
+  - name: notify-discord-failure
+    image: python:3.11-slim
+    environment:
+      DISCORD_WEBHOOK:
+        from_secret: DISCORD_WEBHOOK
+      STATUS: failure
+      DOCKER_REPO: harbor.sefaz.ceia.inf.ufg.br/sefinceia/${DRONE_REPO_NAME}
+      DRONE_COMMIT_AUTHOR: ${DRONE_COMMIT_AUTHOR}
+      DRONE_BRANCH: ${DRONE_BRANCH}
+      DRONE_COMMIT_SHA: ${DRONE_COMMIT_SHA}
+      DRONE_REPO_OWNER: ${DRONE_REPO_OWNER}
+      DRONE_REPO_NAME: ${DRONE_REPO_NAME}
+      DRONE_BUILD_LINK: ${DRONE_BUILD_LINK}
+    commands:
+      - apt-get update && apt-get install -y curl
+      - pip install requests pytz python-dateutil
+      - python3 gitops-ceia-manifests/scripts/notify_discord.py
+    when:
+      status:
+        - failure
+
+---
+kind: pipeline
+type: kubernetes
+name: gee-integrator-api-development
+
+trigger:
+  branch:
+    - develop
+  event:
+    exclude:
+      - pull_request
+
+steps:
+  - name: build-and-push
+    image: plugins/kaniko
+    settings:
+      registry: harbor.sefaz.ceia.inf.ufg.br
+      repo: harbor.sefaz.ceia.inf.ufg.br/sefinceia/gee-integrator-api
+      tags:
+        - dev-latest
+        - dev-${DRONE_COMMIT_SHA:0:7}
+      username:
+        from_secret: HARBOR_USERNAME
+      password:
+        from_secret: HARBOR_PASSWORD
+      skip_tls_verify: false
+      verbose: true
+
+  - name: update-gitops-manifest
+    image: alpine/git
+    environment:
+      GITHUB_TOKEN:
+        from_secret: GITHUB_ACESS_TOKEN
+    commands:
+      - echo "Updating GitOps manifest for DEV..."
+      - git config --global user.name "ceiaprefeituradevops"
+      - git config --global user.email "ceiaprefeitura@gmail.com"
+      - git clone https://$GITHUB_TOKEN@github.com/CEIA-Prefeitura/gitops-ceia-manifests.git
+      - cd gitops-ceia-manifests/gee-integrator-api-dev/helm
+      - sed -i "s|\(tag:\).*|\1 \"dev-${DRONE_COMMIT_SHA:0:7}\"|" values.yaml
+      - echo "Changes:"
+      - git diff values.yaml
+      - git add values.yaml
+      - git commit -m "Update gee-integrator-api-dev image tag to dev-${DRONE_COMMIT_SHA:0:7} [CI/CD]"
+      - git push origin main
+      - echo "GitOps manifest updated for DEV!"
     depends_on:
       - build-and-push
 
